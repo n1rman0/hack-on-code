@@ -1,0 +1,41 @@
+{
+    "name": "razorpay-installer",
+    "displayName": "Razorpay Pod Installer",
+    "description": "Install Razorpay SDK with flavor options from right-click on .xcodeproj",
+    "version": "1.0.0",
+    "publisher": "nirman", 
+    "engines": {
+        "vscode": "^1.86.0"
+    },
+    "activationEvents": [
+        "onCommand:extension.installRazorpay"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "extension.installRazorpay",
+                "title": "Install Razorpay SDK"
+            }
+        ],
+        "menus": {
+            "explorer/context": [
+                {
+                    "command": "extension.installRazorpay",
+                    "when": "resourceExtname == .xcodeproj",
+                    "group": "navigation"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "tsc -p ./",
+        "compile": "tsc"
+    },
+    "devDependencies": {
+        "@types/node": "^22.14.0",
+        "@types/vscode": "^1.86.0",
+        "@vscode/test-electron": "^2.1.5",
+        "typescript": "^5.8.3"
+    }
+}

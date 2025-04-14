@@ -1,0 +1,193 @@
+# Razorpay iOS Standard SDK Integration  
+### (iOS Developer-Focused with Test Value Guidance, RAG Optimized)
+
+This document is for **iOS developers**. It shows you how to integrate the Razorpay iOS SDK. Backend interactions are explained for context, but **you won’t need to implement them**. Where backend isn’t available, **temporary values** are highlighted so you can still test.
+
+---
+
+## 1. Initialize the SDK
+
+You’ll need:
+- A `key_id` (don’t hardcode in production)
+- A delegate conforming to `RazorpayPaymentCompletionProtocol`
+
+```swift
+import Razorpay
+
+class ViewController: UIViewController, RazorpayPaymentCompletionProtocol {
+    var razorpay: RazorpayCheckout!
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        // ✅ TEMP: Use Razorpay test key if backend doesn't serve it yet
+        razorpay = RazorpayCheckout.initWithKey("rzp_test_1234567890", andDelegate: self)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        self.showPaymentForm()
+    }
+}
+```
+
+> 🔐 Replace with backend-sent key during production. For now, test keys like `rzp_test_...` work.
+
+---
+
+## 2. Order Creation (Backend Context Only)
+
+Every transaction must be linked to an `order_id`, created on the server with Razorpay’s Orders API.
+
+```json
+{
+  "amount": 5000,
+  "currency": "INR",
+  "receipt": "receipt#1"
+}
+```
+
+The backend response gives:
+```json
+{
+  "id": "order_DBJOWzybf0sJbb",
+  "status": "created"
+}
+```
+
+> 💡 **TEMP**: You can hardcode a test `order_id` from the Dashboard or from Postman sample response like:
+```swift
+let orderId = "order_DBJOWzybf0sJbb"
+```
+
+Ask your backend or QA for a valid static test order ID.
+
+---
+
+## 3. Show Checkout Form
+
+```swift
+internal func showPaymentForm() {
+    let options: [String: Any] = [
+        "key": "rzp_test_1234567890", // ✅ TEMP test key
+        "amount": "10000", // paise (₹100)
+        "currency": "INR",
+        "order_id": "order_DBJOWzybf0sJbb", // ✅ TEMP test order ID
+        "name": "Demo Corp",
+        "description": "Test Purchase",
+        "image": "https://example.com/logo.png",
+        "prefill": [
+            "contact": "9999999999",
+            "email": "test@example.com"
+        ],
+        "theme": [
+            "color": "#3399cc"
+        ]
+    ]
+    razorpay.open(options)
+}
+```
+
+> ✅ You can fully test UI, UPI flows, and callbacks with test values even without backend.
+
+---
+
+## 4. UPI Intent Setup (Recommended)
+
+To enable deep linking into UPI apps:
+
+```xml
+<key>LSApplicationQueriesSchemes</key>
+<array>
+    <string>tez</string>
+    <string>phonepe</string>
+    <string>paytmmp</string>
+    <string>bhim</string>
+</array>
+```
+
+> ☝🏽 This lets iOS know which apps it’s allowed to open.
+
+---
+
+## 5. Handle Payment Events
+
+You will receive success/error in the following callbacks:
+
+```swift
+extension CheckoutViewController: RazorpayPaymentCompletionProtocol {
+    func onPaymentSuccess(_ payment_id: String) {
+        // ✅ TEMP: Print or log this
+        // Later, send to backend
+    }
+
+    func onPaymentError(_ code: Int32, description str: String) {
+        // Handle and show error
+    }
+}
+```
+
+To capture full metadata:
+```swift
+extension CheckoutViewController: RazorpayPaymentCompletionProtocolWithData {
+    func onPaymentSuccess(_ payment_id: String, andData response: [AnyHashable: Any]?) {
+        // ✅ TEMP: You can log the full payload here
+    }
+
+    func onPaymentError(_ code: Int32, description str: String, andData response: [AnyHashable: Any]?) {
+        // Optional debug info
+    }
+}
+```
+
+> ✅ This step works end-to-end even if backend is missing. Log the values to console.
+
+---
+
+## 6. Sample Payload (Pass to Backend Later)
+
+You’ll receive this from Razorpay SDK:
+```json
+{
+  "razorpay_payment_id": "pay_29QQoUBi66xm2f",
+  "razorpay_order_id": "order_9A33XWu170gUtm",
+  "razorpay_signature": "some_signature_here"
+}
+```
+
+> ✅ For now: just log these values or copy them into Notes.
+
+---
+
+## 7. Signature Verification (Backend Only)
+
+Backend does:
+```
+hmac_sha256(order_id + "|" + payment_id, secret)
+```
+
+Then it matches it against `razorpay_signature`.
+
+> 🚫 Don’t implement this in iOS — just collect and send the values later.
+
+---
+
+## 8. What Happens Post-Verification
+
+Once the backend confirms signature match:
+- Payment is marked "authentic"
+- Backend may store info or call Razorpay APIs
+- You can switch from test key to live key
+
+> 🔁 Keep test/live keys separate. Use `.env`, build configs, or backend fetching.
+
+---
+
+## 🔄 TL;DR — Where Can You Use Temp Values?
+
+| Field                | Temp Test Value                      | Until…                        |
+|---------------------|--------------------------------------|-------------------------------|
+| `key`               | `rzp_test_...`                       | Backend sends real key        |
+| `order_id`          | Hardcoded valid test order_id        | Backend starts creating orders|
+| `payment callbacks` | Just log data                        | Backend ready to verify       |
+| `amount`, `currency`| Static test values                   | Dynamic price logic ready     |
