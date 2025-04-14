@@ -6,51 +6,139 @@ const vscode = require("vscode");
 const fs = require("fs");
 const path = require("path");
 const child_process_1 = require("child_process");
+const axios_1 = require("axios");
+const runRAG_1 = require("./utils/runRAG");
+const diffUtils_1 = require("./utils/diffUtils");
 var mainContext;
+const RAZORPAY_API_BASE = 'http://127.0.0.1:5000';
 function activate(context) {
     mainContext = context;
-    const disposable = vscode.commands.registerCommand('extension.installRazorpay', async (uri) => {
-        var _a, _b;
-        const flavor = await vscode.window.showQuickPick(['Standard', 'Standard + TurboUI'], { placeHolder: 'Select Razorpay SDK flavor' });
-        if (!flavor)
-            return;
-        const searchRoot = (uri === null || uri === void 0 ? void 0 : uri.fsPath) || ((_b = (_a = vscode.workspace.workspaceFolders) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.uri.fsPath);
-        if (!searchRoot) {
-            vscode.window.showErrorMessage('No valid folder selected or open in workspace.');
-            return;
-        }
-        const podfilePath = findFileByName(searchRoot, 'Podfile', 2);
-        const pods = getPodsForFlavor(flavor);
-        if (podfilePath) {
-            const projectDir = path.dirname(podfilePath);
-            injectPodsAndInstall(projectDir, podfilePath, pods);
-            if (flavor === 'Standard + TurboUI') {
-                addLocationPermissionIfNeeded(projectDir);
-            }
-        }
-        else {
-            const xcodeprojPath = findFileByExtension(searchRoot, '.xcodeproj', 2);
-            if (xcodeprojPath) {
-                const xcodeDir = path.dirname(xcodeprojPath);
-                const podfilePath = path.join(xcodeDir, 'Podfile');
-                createPodfile(xcodeDir, () => {
-                    injectPodsAndInstall(xcodeDir, podfilePath, pods);
-                    if (flavor === 'Standard + TurboUI') {
-                        addLocationPermissionIfNeeded(xcodeDir);
-                    }
-                });
-            }
-            else {
-                vscode.window.showErrorMessage('Could not find Podfile or .xcodeproj in selected folder.');
-            }
-        }
+    const disposable = vscode.commands.registerCommand('extension.installRazorpay', async () => {
+        await loginAndConfigureAndContinue();
     });
     context.subscriptions.push(disposable);
+}
+// ----------------- Main Flow ------------------
+async function loginAndConfigureAndContinue() {
+    var _a;
+    const email = await vscode.window.showInputBox({
+        prompt: 'Enter your Razorpay login email',
+        ignoreFocusOut: true
+    });
+    const password = await vscode.window.showInputBox({
+        prompt: 'Enter your Razorpay password',
+        password: true,
+        ignoreFocusOut: true
+    });
+    if (!email || !password) {
+        vscode.window.showErrorMessage('❌ Login cancelled.');
+        return;
+    }
+    const progress = await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: "Logging into Razorpay...",
+        cancellable: false
+    }, async (progress) => {
+        progress.report({ increment: 30, message: "Authenticating..." });
+        await new Promise(resolve => setTimeout(resolve, 800));
+        progress.report({ increment: 40, message: "Validating credentials..." });
+        await new Promise(resolve => setTimeout(resolve, 700));
+        progress.report({ increment: 30, message: "Completing login..." });
+        await new Promise(resolve => setTimeout(resolve, 500));
+    });
+    vscode.window.showInformationMessage(`🔐 Logged in as ${email} (mock)`);
+    try {
+        const response = await axios_1.default.get(`${RAZORPAY_API_BASE}/data`);
+        const data = response.data;
+        const selectedFlavor = await vscode.window.showQuickPick(data.merchant_flavours, { placeHolder: 'Select Razorpay SDK flavor for integration' });
+        if (!selectedFlavor) {
+            vscode.window.showWarningMessage('⚠️ SDK flavor not selected.');
+            return;
+        }
+        const envContent = [
+            `RAZORPAY_MERCHANT_KEY=${data.merchant_public_key}`,
+            `RAZORPAY_API_SECRET=${data.merchant_secret}`,
+            `RAZORPAY_SAMPLE_ORDER_ID=${data.merchant_sample_order_id}`,
+            `RAZORPAY_SELECTED_FLAVOR=${selectedFlavor}`
+        ].join('\n');
+        const storagePath = ((_a = vscode.extensions.getExtension('nirman.razorpay-installer')) === null || _a === void 0 ? void 0 : _a.extensionPath) || mainContext.globalStorageUri.fsPath;
+        const ragPath = path.join(storagePath, 'out', 'rag');
+        if (!fs.existsSync(ragPath)) {
+            fs.mkdirSync(ragPath, { recursive: true });
+        }
+        const envPath = path.join(ragPath, '.razorpay.env');
+        fs.writeFileSync(envPath, envContent, 'utf-8');
+        vscode.window.showInformationMessage('✅ Credentials saved to .razorpay.env');
+        await handlePodfileSetupAndInstall(selectedFlavor, envPath);
+    }
+    catch (err) {
+        vscode.window.showErrorMessage(`❌ Failed to fetch Razorpay config: ${err.message}`);
+    }
+}
+async function handlePodfileSetupAndInstall(flavor, envPath) {
+    var _a, _b;
+    const searchRoot = (_b = (_a = vscode.workspace.workspaceFolders) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.uri.fsPath;
+    if (!searchRoot) {
+        vscode.window.showErrorMessage('No valid folder open in workspace.');
+        return;
+    }
+    const podfilePath = findFileByName(searchRoot, 'Podfile', 2);
+    let projectDir;
+    let podfileTargetPath;
+    if (podfilePath) {
+        projectDir = path.dirname(podfilePath);
+        podfileTargetPath = podfilePath;
+    }
+    else {
+        const xcodeprojPath = findFileByExtension(searchRoot, '.xcodeproj', 2);
+        if (xcodeprojPath) {
+            const xcodeDir = path.dirname(xcodeprojPath);
+            const podfilePath = path.join(xcodeDir, 'Podfile');
+            await new Promise((resolve) => createPodfile(xcodeDir, resolve));
+            projectDir = xcodeDir;
+            podfileTargetPath = podfilePath;
+        }
+        else {
+            vscode.window.showErrorMessage('❌ Could not find Podfile or .xcodeproj.');
+            return;
+        }
+    }
+    const pods = getPodsForFlavor(flavor);
+    injectPodsAndInstall(projectDir, podfileTargetPath, pods);
+    if (flavor.includes('TurboUI')) {
+        addLocationPermissionIfNeeded(projectDir);
+    }
+    const selectedFile = await promptForTargetSwiftFile(envPath);
+    if (selectedFile) {
+        const generatedCode = await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: "🤖 Generating Razorpay Integration Code",
+            cancellable: false
+        }, async (progress) => {
+            progress.report({ message: "Analyzing project context..." });
+            await new Promise(resolve => setTimeout(resolve, 500));
+            progress.report({ message: "Running RAG model..." });
+            console.log('✅ Sending to RAG.');
+            const code = await (0, runRAG_1.runRAG)(selectedFile);
+            progress.report({ message: "Generated Swift code" });
+            return code;
+        });
+        const swiftCodeMatch = generatedCode ? generatedCode.match(/```swift\n([\s\S]*?)\n```/) : null;
+        const swiftCode = swiftCodeMatch ? swiftCodeMatch[1] : '';
+        await vscode.env.clipboard.writeText(swiftCode);
+        vscode.window.showInformationMessage('✅ Generated code copied to clipboard');
+        if (swiftCode) {
+            const replaced = await (0, diffUtils_1.showDiffAndMaybeReplace)(selectedFile, swiftCode, 'Razorpay Integration Suggestion');
+            if (replaced) {
+                console.log('✅ Final Swift file updated.');
+            }
+        }
+    }
 }
 // ----------------- Helpers ------------------
 function getPodsForFlavor(flavor) {
     const pods = ['pod \'razorpay-pod\''];
-    if (flavor === 'Standard + TurboUI') {
+    if (flavor.includes('TurboUI')) {
         pods.push('pod \'razorpay-turbo\'');
     }
     return pods;
@@ -64,12 +152,10 @@ function findFileByName(startDir, filename, maxDepth = 2) {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         for (const entry of entries) {
             const fullPath = path.join(dir, entry.name);
-            if (entry.isFile() && entry.name === filename) {
+            if (entry.isFile() && entry.name === filename)
                 return fullPath;
-            }
-            if (entry.isDirectory()) {
+            if (entry.isDirectory())
                 queue.push({ dir: fullPath, depth: depth + 1 });
-            }
         }
     }
     return null;
@@ -83,12 +169,10 @@ function findFileByExtension(startDir, ext, maxDepth = 2) {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         for (const entry of entries) {
             const fullPath = path.join(dir, entry.name);
-            if (entry.isDirectory() && entry.name.endsWith(ext)) {
+            if (entry.isDirectory() && entry.name.endsWith(ext))
                 return fullPath;
-            }
-            if (entry.isDirectory()) {
+            if (entry.isDirectory())
                 queue.push({ dir: fullPath, depth: depth + 1 });
-            }
         }
     }
     return null;
@@ -152,41 +236,13 @@ function runPodInstall(projectDir) {
             LANG: 'en_US.UTF-8',
             LC_ALL: 'en_US.UTF-8'
         }
-    }, async (err, stdout, stderr) => {
-        var _a;
+    }, (err, stdout, stderr) => {
         if (err) {
             vscode.window.showErrorMessage(`❌ Pod install failed: ${stderr}`);
             console.error(stderr);
         }
         else {
             vscode.window.showInformationMessage(`✅ pod install completed.`);
-            // 🌱 Collect RAG config from user
-            const merchantKey = await vscode.window.showInputBox({
-                prompt: 'Enter your Razorpay Merchant Key',
-                placeHolder: 'rzp_test_...',
-                ignoreFocusOut: true
-            });
-            const apiSecret = await vscode.window.showInputBox({
-                prompt: 'Enter your Razorpay API Secret',
-                placeHolder: 'shh_this_is_secret',
-                password: true,
-                ignoreFocusOut: true
-            });
-            const orderId = await vscode.window.showInputBox({
-                prompt: 'Enter a sample Order ID',
-                placeHolder: 'order_ABC123XYZ',
-                ignoreFocusOut: true
-            });
-            const envContent = [
-                `RAZORPAY_MERCHANT_KEY=${merchantKey !== null && merchantKey !== void 0 ? merchantKey : ''}`,
-                `RAZORPAY_API_SECRET=${apiSecret !== null && apiSecret !== void 0 ? apiSecret : ''}`,
-                `RAZORPAY_SAMPLE_ORDER_ID=${orderId !== null && orderId !== void 0 ? orderId : ''}`
-            ].join('\n');
-            const storagePath = ((_a = vscode.extensions.getExtension('nirman.razorpay-installer')) === null || _a === void 0 ? void 0 : _a.extensionPath) || mainContext.globalStorageUri.fsPath;
-            const envPath = path.join(storagePath, '.razorpay.env');
-            fs.writeFileSync(envPath, envContent, 'utf-8');
-            vscode.window.showInformationMessage(`✅ Credentials saved to .razorpay.env`);
-            const selectedFile = await promptForTargetSwiftFile(envPath);
         }
     });
 }
@@ -202,32 +258,28 @@ function addLocationPermissionIfNeeded(projectDir) {
         return;
     }
     const insertion = `  <key>NSLocationWhenInUseUsageDescription</key>\n  <string>because I said so</string>\n`;
-    // Insert just before the last </dict>
     const updated = content.replace(/<\/dict>/, insertion + '</dict>');
     fs.writeFileSync(infoPlistPath, updated, 'utf-8');
     vscode.window.showInformationMessage('✅ Location permission added to Info.plist.');
 }
 async function promptForTargetSwiftFile(envPath) {
-    vscode.window.showInformationMessage('📄 Please select the Swift file where Razorpay SDK integration code should be inserted.');
+    vscode.window.showInformationMessage('📄 Please select the Swift file for Razorpay integration.');
     const selectedFileUri = await vscode.window.showOpenDialog({
-        title: 'Select a Swift file for Razorpay integration',
+        title: 'Select a Swift file',
         canSelectFiles: true,
         canSelectFolders: false,
         canSelectMany: false,
         openLabel: 'Use this file',
-        filters: {
-            'Swift Files': ['swift']
-        }
+        filters: { 'Swift Files': ['swift'] }
     });
     if (selectedFileUri && selectedFileUri[0]) {
         const targetFilePath = selectedFileUri[0].fsPath;
         if (!targetFilePath.endsWith('.swift')) {
             vscode.window.showErrorMessage('❌ Please select a valid .swift file.');
-            return undefined;
+            return;
         }
         const filename = path.basename(targetFilePath);
-        vscode.window.showInformationMessage(`📝 Selected file for integration: ${filename}`);
-        // Save to .env
+        vscode.window.showInformationMessage(`📝 Selected file: ${filename}`);
         fs.appendFileSync(envPath, `\nRAZORPAY_TARGET_FILE=${targetFilePath}`);
         return targetFilePath;
     }

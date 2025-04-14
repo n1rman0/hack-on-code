@@ -1,0 +1,16 @@
+langchain
+langchain-community
+langchain-huggingface
+langchain-chroma
+
+chromadb
+sentence-transformers
+openai
+anthropic
+
+python-dotenv
+flask
+fastapi
+uvicorn
+
+hf-xet  

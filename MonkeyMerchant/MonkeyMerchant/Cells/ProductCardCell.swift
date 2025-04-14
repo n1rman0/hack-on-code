@@ -23,12 +23,33 @@ final class ProductCardCell: UITableViewCell {
         return view
     }()
 
+    private let rootStackView: UIStackView = {
+        let stack = UIStackView()
+        stack.axis = .horizontal
+        stack.spacing = 12
+        stack.alignment = .top
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        return stack
+    }()
+
+    private let rightStackView: UIStackView = {
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 4
+        stack.alignment = .leading
+        stack.distribution = .fill
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        return stack
+    }()
+
     private let productImageView: UIImageView = {
         let img = UIImageView()
         img.translatesAutoresizingMaskIntoConstraints = false
-        img.contentMode = .scaleAspectFit
+        img.contentMode = .scaleAspectFill
         img.layer.cornerRadius = 8
         img.clipsToBounds = true
+        img.widthAnchor.constraint(equalToConstant: 120).isActive = true
+//        img.heightAnchor.constraint(equalToConstant: 80).isActive = true
         return img
     }()
 
@@ -85,11 +106,15 @@ final class ProductCardCell: UITableViewCell {
         buyButton.addTarget(self, action: #selector(buyTapped), for: .touchUpInside)
 
         contentView.addSubview(cardView)
-        cardView.addSubview(productImageView)
-        cardView.addSubview(titleLabel)
-        cardView.addSubview(descriptionLabel)
-        cardView.addSubview(priceLabel)
-        cardView.addSubview(buyButton)
+        cardView.addSubview(rootStackView)
+        
+        rootStackView.addArrangedSubview(productImageView)
+        rootStackView.addArrangedSubview(rightStackView)
+        
+        rightStackView.addArrangedSubview(titleLabel)
+        rightStackView.addArrangedSubview(descriptionLabel)
+        rightStackView.addArrangedSubview(priceLabel)
+        rightStackView.addArrangedSubview(buyButton)
 
         NSLayoutConstraint.activate([
             cardView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
@@ -97,28 +122,13 @@ final class ProductCardCell: UITableViewCell {
             cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
 
-            productImageView.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 12),
-            productImageView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 12),
-            productImageView.widthAnchor.constraint(equalToConstant: 80),
-            productImageView.heightAnchor.constraint(equalToConstant: 80),
-
-            titleLabel.topAnchor.constraint(equalTo: productImageView.topAnchor),
-            titleLabel.leadingAnchor.constraint(equalTo: productImageView.trailingAnchor, constant: 12),
-            titleLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -12),
-
-            descriptionLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
-            descriptionLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-            descriptionLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
-
-            priceLabel.topAnchor.constraint(equalTo: descriptionLabel.bottomAnchor, constant: 6),
-            priceLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-
-            buyButton.topAnchor.constraint(greaterThanOrEqualTo: priceLabel.bottomAnchor, constant: 10),
-            buyButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -12),
-            buyButton.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -12),
-            buyButton.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 12),
-//            buyButton.widthAnchor.constraint(equalToConstant: 80),
-            buyButton.heightAnchor.constraint(equalToConstant: 36)
+            rootStackView.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 12),
+            rootStackView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 12),
+            rootStackView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -12),
+            rootStackView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -12),
+            
+            buyButton.heightAnchor.constraint(equalToConstant: 36),
+            buyButton.widthAnchor.constraint(equalToConstant: 72)
         ])
     }
 

@@ -30,23 +30,51 @@ final class MonkeyFeedViewModel {
     private func loadDummyProducts() {
         products = [
             ProductModel(
-                id: "prod1",
-                image: UIImage(named: "airpod"),
-                title: "Monkey Wireless Earbuds",
-                description: "High-quality Bluetooth earbuds with noise cancellation.",
-                price: 2999.0,
-                currency: "₹",
-                deliveryEstimate: "Delivery by Apr 18"
-            ),
-            ProductModel(
                 id: "prod2",
-                image: UIImage(named: "watch"),
-                title: "Monkey Smartwatch",
-                description: "Track your fitness and stay connected.",
+                image: UIImage(named: "majnu"),
+                title: "Modern Art",
+                description: "Majnu Bhai Street Arts",
                 price: 4999.0,
                 currency: "₹",
                 deliveryEstimate: "Delivery by Apr 20"
-            )
+            ),
+            ProductModel(
+                id: "prod1",
+                image: UIImage(named: "lsd"),
+                title: "Paracetamol",
+                description: "May or may not be parcetamol",
+                price: 2999.0,
+                currency: "₹",
+                deliveryEstimate: "Yesterday"
+            ),
+            ProductModel(
+                id: "prod2",
+                image: UIImage(named: "neet-exam"),
+                title: "NEET Papers 2026",
+                description: "Sold by Deviprasad Printing",
+                price: 499999.0,
+                currency: "₹",
+                deliveryEstimate: "Before Exams"
+            ),
+            ProductModel(
+                id: "prod2",
+                image: UIImage(named: "21din"),
+                title: "Get Rich Quick Book",
+                description: "Raju: Bestsellers",
+                price: 499.0,
+                currency: "₹",
+                deliveryEstimate: "Before Exams"
+            ),
+            ProductModel(
+                id: "prod5",
+                image: UIImage(named: "unicorn"),
+                title: "Original Unicorn",
+                description: "HorshSheet",
+                price: 99499.0,
+                currency: "₹",
+                deliveryEstimate: "Tommorow"
+            ),
+     
         ]
     }
 
